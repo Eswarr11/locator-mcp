@@ -1,0 +1,24 @@
+---
+description: Test conventions for locator-mcp
+globs: tests/**/*.ts
+alwaysApply: false
+---
+
+# Tests
+
+- Use Node built-in test runner: `import { test, describe } from 'node:test'`
+- Use `node:assert/strict` for assertions
+- Run via `npm test` (`node --import tsx/esm --test tests/**/*.spec.ts`)
+
+## Style
+
+- Test pure functions directly (key generation, XPath variants, ranking, dynamic value detection)
+- Use small `ElementContext` fixtures — see `ctx()` helper pattern in `scanner.spec.ts`
+- No browser/Playwright in unit tests unless explicitly adding integration tests
+
+## Coverage focus
+
+- XPath variant generation and scoring edge cases
+- Generic testId disambiguation
+- Relational XPath strategies
+- Constants and denylist behavior

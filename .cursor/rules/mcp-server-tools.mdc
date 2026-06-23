@@ -1,0 +1,34 @@
+---
+description: MCP server tool patterns and response conventions
+globs: src/server.ts
+alwaysApply: false
+---
+
+# MCP Server Tools
+
+## Tool design
+
+- Define tools with `server.tool(name, description, zodSchema, handler)`
+- Use clear zod `.describe()` on every parameter
+- Return `{ content: [{ type: 'text', text: string }] }` — JSON-stringify structured payloads
+
+## Existing tools
+
+| Tool | Purpose |
+|------|---------|
+| `scan_page` | Scan browser via `cdpEndpoint` or `wsEndpoint`; writes `registry/{scanName}.json` |
+| `get_registry` | Full registry JSON (high token cost) |
+| `get_registry_keys` | Lightweight key list (prefer this first) |
+| `get_locator` | Single entry by key |
+| `search_registry` | Filter by tagName, testId, text, confidence |
+| `list_registries` | List available registry files |
+
+## scan_page
+
+- Requires exactly one of `cdpEndpoint` or `wsEndpoint`
+- `scanMode`: `interactive` (default), `testId`, or `full`
+- On success, include `registryFile`, stats, and guidance to use token-efficient read tools
+
+## Error responses
+
+Return plain-text errors in `content[0].text` — include actionable setup hints (e.g. Chrome `--remote-debugging-port`).

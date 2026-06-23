@@ -1,0 +1,32 @@
+---
+description: Core project context and repo conventions for locator-mcp
+alwaysApply: true
+---
+
+# locator-mcp
+
+MCP server that scans browser pages via Playwright/CDP and writes per-page locator registries.
+
+## Layout
+
+- `src/server.ts` — MCP tool definitions
+- `src/scanner/` — page scan pipeline (discover → extract → generate → validate → save)
+- `src/shared/` — registry I/O, constants, utilities
+- `registry/` — local scan output (`{scanName}.json`); **never commit** JSON files
+- `tests/` — Node test runner unit tests (`npm test`)
+
+## Commands
+
+- `npm run dev` — run server from TypeScript (`tsx src/server.ts`)
+- `npm run build` — compile to `dist/` (`tsc`)
+- `npm start` — run compiled server (`node dist/server.js`)
+- `npm test` — unit tests
+
+## Git
+
+Do not commit: `node_modules/`, `dist/`, `registry/*.json`, `.env*`.
+Registry data is generated locally via `scan_page`.
+
+## Token-efficient reads
+
+Prefer `get_registry_keys` or `get_locator` over `get_registry` when working with large registries.

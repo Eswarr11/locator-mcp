@@ -5,7 +5,7 @@ node_modules/
 dist/
 
 # Scanned locator registries (generated locally via scan_page)
-locator-mcp/registry/*.json
+registry/*.json
 
 # Environment / secrets
 .env
