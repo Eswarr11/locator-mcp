@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# TypeScript build output
+dist/
+
+# Scanned locator registries (generated locally via scan_page)
+locator-mcp/registry/*.json
+
+# Environment / secrets
+.env
+.env.*
+
+# OS
+.DS_Store
