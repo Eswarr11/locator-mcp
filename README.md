@@ -34,6 +34,7 @@ src/
   shared/            Registry I/O, constants, utils
 registry/            Local scan output (gitignored *.json)
 tests/               Unit tests
+.cursor/mcp.json     Cursor MCP config (committed, portable)
 .cursor/rules/       Cursor AI rules for this repo
 ```
 
@@ -52,50 +53,73 @@ Scans write to `registry/{scanName}.json`. Registry JSON files are **not committ
 
 ## Cursor MCP configuration
 
-Add to `~/.cursor/mcp.json` under `mcpServers`.
+Run `npm install` in the repo before connecting MCP.
 
-Set `cwd` to your local clone path. From the repo root:
+> **Note:** Global `~/.cursor/mcp.json` ignores `cwd`. Relative paths like `src/server.ts` resolve from your home directory and fail. Use **project** `.cursor/mcp.json` (recommended) or `npm run mcp --prefix <abs-path>` in global config.
 
-```bash
-pwd
-# e.g. /Users/you/projects/locator-mcp
-```
+### Cursor (project) — recommended
 
-Use that output for `<path-to-repo>` in the snippets below.
-
-### Recommended (dev — no build step)
+This repo includes [`.cursor/mcp.json`](.cursor/mcp.json). Open the repo as your Cursor workspace — no absolute paths needed:
 
 ```json
 {
   "mcpServers": {
     "locator-mcp": {
       "command": "npm",
-      "args": ["run", "dev"],
-      "cwd": "<path-to-repo>"
+      "args": ["run", "mcp", "--prefix", "${workspaceFolder}"]
     }
   }
 }
 ```
 
-### Production (compiled)
+Reload MCP after clone: **Cmd+Shift+J → MCP**.
 
-Run `npm run build` in the repo first, then use:
+If you also define `locator-mcp` in global `~/.cursor/mcp.json`, remove one to avoid duplicate servers.
+
+### Cursor (global)
+
+For use across workspaces, add to `~/.cursor/mcp.json` with your clone path:
+
+```json
+"locator-mcp": {
+  "command": "npm",
+  "args": ["run", "mcp", "--prefix", "/Users/eswar/Desktop/locator-collector"]
+}
+```
+
+Replace the path with your local clone location.
+
+### Claude Desktop
+
+Claude does not support `${workspaceFolder}`. Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
     "locator-mcp": {
       "command": "npm",
-      "args": ["run", "start"],
-      "cwd": "<path-to-repo>"
+      "args": ["run", "mcp", "--prefix", "/Users/you/path/to/locator-mcp"]
     }
   }
+}
+```
+
+Restart Claude Desktop after saving.
+
+### Production (compiled)
+
+Run `npm run build` in the repo first:
+
+```json
+"locator-mcp": {
+  "command": "node",
+  "args": ["/Users/you/path/to/locator-mcp/dist/server.js"]
 }
 ```
 
 ### With Playwright MCP (for `scan_page`)
 
-`scan_page` connects to an already-open browser. Pair with Playwright MCP on the same Chrome CDP endpoint:
+`scan_page` connects to an already-open browser. Pair with Playwright MCP on the same Chrome CDP endpoint (typically in global `~/.cursor/mcp.json`):
 
 ```json
 {
@@ -110,8 +134,7 @@ Run `npm run build` in the repo first, then use:
     },
     "locator-mcp": {
       "command": "npm",
-      "args": ["run", "dev"],
-      "cwd": "<path-to-repo>"
+      "args": ["run", "mcp", "--prefix", "/Users/eswar/Desktop/locator-collector"]
     }
   }
 }
@@ -124,33 +147,3 @@ open -a "Google Chrome" --args --remote-debugging-port=9222 --user-data-dir=/tmp
 ```
 
 Then call `scan_page` with `cdpEndpoint: "http://localhost:9222"`.
-
-### Alternative (explicit entry file)
-
-If you prefer not to use npm scripts, set `cwd` and a relative `args` path:
-
-```json
-{
-  "mcpServers": {
-    "locator-mcp": {
-      "command": "npx",
-      "args": ["tsx", "src/server.ts"],
-      "cwd": "<path-to-repo>"
-    }
-  }
-}
-```
-
-Compiled:
-
-```json
-{
-  "mcpServers": {
-    "locator-mcp": {
-      "command": "node",
-      "args": ["dist/server.js"],
-      "cwd": "<path-to-repo>"
-    }
-  }
-}
-```

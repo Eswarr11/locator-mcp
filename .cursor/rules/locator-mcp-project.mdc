@@ -17,10 +17,15 @@ MCP server that scans browser pages via Playwright/CDP and writes per-page locat
 
 ## Commands
 
-- `npm run dev` — run server from TypeScript (`tsx src/server.ts`)
+- `npm run mcp` — run MCP server (`tsx src/server.ts`); used by `.cursor/mcp.json`
+- `npm run dev` — same as `mcp`, for local terminal use
 - `npm run build` — compile to `dist/` (`tsc`)
 - `npm start` — run compiled server (`node dist/server.js`)
 - `npm test` — unit tests
+
+## MCP setup
+
+Project config at `.cursor/mcp.json` uses `npm run mcp --prefix ${workspaceFolder}`. For global Cursor or Claude Desktop, use `npm run mcp --prefix <abs-path>` — see README.
 
 ## Git
 
