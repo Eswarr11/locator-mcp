@@ -3,5 +3,5 @@ import { LocatorRegistry } from './scanner.types.js';
 import { getRegistryPath } from '../shared/registry.js';
 
 export async function saveRegistry(registry: LocatorRegistry, scanName: string): Promise<void> {
-  await writeFile(getRegistryPath(scanName), JSON.stringify(registry, null, 2), 'utf-8');
+  await writeFile(getRegistryPath(scanName), JSON.stringify(registry), 'utf-8');
 }

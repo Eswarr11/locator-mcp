@@ -18,9 +18,14 @@ import { generateLocators } from '../src/scanner/generate-locators.js';
 import {
   generateAllXPathVariants,
   buildTestIdFrequencyMap,
+  generateXPathVariantsUpToTier,
 } from '../src/scanner/generate-xpath-variants.js';
 import {
+  chunkArray,
   computeVariantScore,
+  getVariantCounts,
+  indexUniqueXPaths,
+  rankXPathVariantsWithCounts,
   toRegistryLocators,
 } from '../src/scanner/rank-xpath-variants.js';
 import { escapeXPathLiteral, isUnstableClass } from '../src/scanner/xpath-utils.js';
@@ -432,5 +437,140 @@ describe('buildTestIdFrequencyMap', () => {
     const counts = buildTestIdFrequencyMap(contexts);
     assert.equal(counts.get('box'), 2);
     assert.equal(counts.get('save'), 1);
+  });
+});
+
+describe('chunkArray', () => {
+  test('splits arrays into fixed-size chunks', () => {
+    assert.deepEqual(chunkArray([1, 2, 3, 4, 5], 2), [[1, 2], [3, 4], [5]]);
+  });
+
+  test('returns empty array for empty input', () => {
+    assert.deepEqual(chunkArray([], 3), []);
+  });
+});
+
+describe('indexUniqueXPaths', () => {
+  test('deduplicates shared xpaths across variant lists', () => {
+    const xpathToIndex = new Map<string, number>();
+    const uniqueXpaths: string[] = [];
+    const shared: XPathVariant = {
+      xpath: "//button[@data-testid='save']",
+      tier: 1,
+      strategy: 'testingAttribute',
+      variantType: 'exact',
+      confidenceScore: 0,
+      matchCount: 0,
+      isRelational: false,
+    };
+    const unique: XPathVariant = {
+      xpath: "//button[@data-testid='cancel']",
+      tier: 1,
+      strategy: 'testingAttribute',
+      variantType: 'exact',
+      confidenceScore: 0,
+      matchCount: 0,
+      isRelational: false,
+    };
+
+    const firstNew = indexUniqueXPaths(xpathToIndex, uniqueXpaths, [shared, unique]);
+    const secondNew = indexUniqueXPaths(xpathToIndex, uniqueXpaths, [shared]);
+
+    assert.deepEqual(firstNew, [shared.xpath, unique.xpath]);
+    assert.deepEqual(secondNew, []);
+    assert.equal(uniqueXpaths.length, 2);
+    assert.equal(xpathToIndex.get(shared.xpath), 0);
+    assert.equal(xpathToIndex.get(unique.xpath), 1);
+  });
+});
+
+describe('getVariantCounts', () => {
+  test('maps variant xpaths to global count array', () => {
+    const xpathToIndex = new Map([
+      ['//a', 0],
+      ['//b', 1],
+    ]);
+    const counts = [3, 1];
+    const variants: XPathVariant[] = [
+      {
+        xpath: '//a',
+        tier: 1,
+        strategy: 'testingAttribute',
+        variantType: 'exact',
+        confidenceScore: 0,
+        matchCount: 0,
+        isRelational: false,
+      },
+      {
+        xpath: '//b',
+        tier: 1,
+        strategy: 'testingAttribute',
+        variantType: 'exact',
+        confidenceScore: 0,
+        matchCount: 0,
+        isRelational: false,
+      },
+    ];
+
+    assert.deepEqual(getVariantCounts(variants, xpathToIndex, counts), [3, 1]);
+  });
+});
+
+describe('rankXPathVariantsWithCounts', () => {
+  test('prefers unique non-positional variants', () => {
+    const variants: XPathVariant[] = [
+      {
+        xpath: "//button[@data-testid='save']",
+        tier: 1,
+        strategy: 'testingAttribute',
+        variantType: 'exact',
+        confidenceScore: 0,
+        matchCount: 0,
+        isRelational: false,
+      },
+      {
+        xpath: "(//button)[1]",
+        tier: 9,
+        strategy: 'positional',
+        variantType: 'exact',
+        confidenceScore: 0,
+        matchCount: 0,
+        isRelational: true,
+      },
+    ];
+
+    const { locators } = rankXPathVariantsWithCounts(variants, [1, 1]);
+    assert.equal(locators.recommended?.xpath, "//button[@data-testid='save']");
+    assert.equal(locators.matchCount, 1);
+    assert.equal(locators.confidence, 'high');
+  });
+
+  test('returns empty locators for no variants', () => {
+    const { locators, ranked } = rankXPathVariantsWithCounts([], []);
+    assert.deepEqual(ranked, []);
+    assert.equal(locators.matchCount, 0);
+    assert.equal(locators.confidence, 'low');
+  });
+});
+
+describe('generateXPathVariantsUpToTier', () => {
+  test('limits generated tiers', () => {
+    const element = ctx({
+      tagName: 'button',
+      attributes: {
+        ...emptyAttrs,
+        testId: 'save-button',
+        testingAttributes: { 'data-testid': 'save-button' },
+      },
+      directText: 'Save',
+    });
+
+    const upToTier3 = generateXPathVariantsUpToTier(element, { testIdCounts: new Map([['save-button', 1]]) }, 3);
+    const allTiers = generateAllXPathVariants(element, { testIdCounts: new Map([['save-button', 1]]) });
+
+    assert.ok(upToTier3.length > 0);
+    assert.ok(allTiers.length >= upToTier3.length);
+    assert.ok(!upToTier3.some((variant) => variant.tier > 3));
+    assert.ok(allTiers.some((variant) => variant.tier > 3));
   });
 });

@@ -118,6 +118,8 @@ export const TIER_BASE_SCORES: Record<number, number> = {
 
 export const MAX_FALLBACK_VARIANTS = 5;
 
+export const XPATH_BATCH_CHUNK_SIZE = 1000;
+
 export const IGNORED_TAGS = new Set([
   'html', 'head', 'body', 'script', 'style',
   'svg', 'path', 'meta', 'link', 'noscript',

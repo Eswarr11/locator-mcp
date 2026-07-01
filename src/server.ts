@@ -128,6 +128,7 @@ server.tool(
             registrySaved: true,
             stats: result.stats,
             warnings: result.warnings,
+            timings: result.timings,
             sample: result.elements.slice(0, 5),
           }, null, 2),
         }],

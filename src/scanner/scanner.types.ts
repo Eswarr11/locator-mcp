@@ -119,6 +119,15 @@ export interface ScanStats {
   interactive: number;
 }
 
+export interface ScanTimings {
+  extractMs: number;
+  generateMs: number;
+  validateMs: number;
+  rankMs: number;
+  saveMs: number;
+  totalMs: number;
+}
+
 export interface ScanResult {
   scanId: string;
   pageUrl: string;
@@ -128,6 +137,7 @@ export interface ScanResult {
   stats: ScanStats;
   warnings: string[];
   registryFile: string;
+  timings?: ScanTimings;
 }
 
 export type LocatorRegistry = Record<string, ElementMetadata>;

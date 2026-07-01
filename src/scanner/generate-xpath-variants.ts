@@ -459,27 +459,35 @@ export function buildTestIdFrequencyMap(contexts: ElementContext[]): Map<string,
   return counts;
 }
 
+const TIER_GENERATORS: Array<(c: ElementContext, p: VariantPageContext) => XPathVariant[]> = [
+  tier1TestingAttributes,
+  tier2Accessibility,
+  tier3Id,
+  tier4FormAttributes,
+  tier5Text,
+  tier6AncestorScoped,
+  tier7LabelSibling,
+  tier8GenericMatch,
+  tier9Positional,
+];
+
+export function generateXPathVariantsUpToTier(
+  ctx: ElementContext,
+  pageContext: VariantPageContext,
+  maxTier: XPathTier
+): XPathVariant[] {
+  const variants: XPathVariant[] = [];
+
+  for (let tier = 1; tier <= maxTier; tier++) {
+    variants.push(...TIER_GENERATORS[tier - 1](ctx, pageContext));
+  }
+
+  return dedupeVariants(variants);
+}
+
 export function generateAllXPathVariants(
   ctx: ElementContext,
   pageContext: VariantPageContext
 ): XPathVariant[] {
-  const tiers: XPathTier[] = [1, 2, 3, 4, 5, 6, 7, 8, 9];
-  const generators: Array<(c: ElementContext, p: VariantPageContext) => XPathVariant[]> = [
-    tier1TestingAttributes,
-    tier2Accessibility,
-    tier3Id,
-    tier4FormAttributes,
-    tier5Text,
-    tier6AncestorScoped,
-    tier7LabelSibling,
-    tier8GenericMatch,
-    tier9Positional,
-  ];
-
-  const variants: XPathVariant[] = [];
-  for (let i = 0; i < tiers.length; i++) {
-    variants.push(...generators[i](ctx, pageContext));
-  }
-
-  return dedupeVariants(variants);
+  return generateXPathVariantsUpToTier(ctx, pageContext, 9);
 }

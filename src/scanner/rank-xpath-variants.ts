@@ -1,5 +1,5 @@
 import { Page } from '@playwright/test';
-import { MAX_FALLBACK_VARIANTS, TIER_BASE_SCORES } from '../shared/constants.js';
+import { MAX_FALLBACK_VARIANTS, TIER_BASE_SCORES, XPATH_BATCH_CHUNK_SIZE } from '../shared/constants.js';
 import {
   LocatorConfidence,
   LocatorTemplates,
@@ -24,6 +24,50 @@ function scoreToConfidence(score: number): LocatorConfidence {
   return 'low';
 }
 
+const EMPTY_LOCATORS: LocatorTemplates = {
+  fallbacks: [],
+  xpath: '',
+  confidence: 'low',
+  matchCount: 0,
+  strategy: 'positional',
+};
+
+export function chunkArray<T>(items: T[], chunkSize: number): T[][] {
+  if (chunkSize <= 0 || items.length === 0) return items.length === 0 ? [] : [items];
+
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
+
+export function indexUniqueXPaths(
+  xpathToIndex: Map<string, number>,
+  uniqueXpaths: string[],
+  variants: XPathVariant[]
+): string[] {
+  const newXpaths: string[] = [];
+
+  for (const variant of variants) {
+    if (xpathToIndex.has(variant.xpath)) continue;
+
+    xpathToIndex.set(variant.xpath, uniqueXpaths.length);
+    uniqueXpaths.push(variant.xpath);
+    newXpaths.push(variant.xpath);
+  }
+
+  return newXpaths;
+}
+
+export function getVariantCounts(
+  variants: XPathVariant[],
+  xpathToIndex: Map<string, number>,
+  counts: number[]
+): number[] {
+  return variants.map((variant) => counts[xpathToIndex.get(variant.xpath)!] ?? 0);
+}
+
 export async function batchCountXPaths(page: Page, xpaths: string[]): Promise<number[]> {
   if (xpaths.length === 0) return [];
 
@@ -45,23 +89,35 @@ export async function batchCountXPaths(page: Page, xpaths: string[]): Promise<nu
   }, xpaths);
 }
 
-export async function rankXPathVariants(
+export async function batchCountXPathsChunked(
   page: Page,
-  variants: XPathVariant[]
-): Promise<{ ranked: XPathVariant[]; locators: LocatorTemplates }> {
-  if (variants.length === 0) {
-    return {
-      ranked: [],
-      locators: { fallbacks: [], xpath: '', confidence: 'low', matchCount: 0, strategy: 'positional' },
-    };
+  xpaths: string[],
+  chunkSize: number = XPATH_BATCH_CHUNK_SIZE
+): Promise<number[]> {
+  if (xpaths.length === 0) return [];
+
+  const chunks = chunkArray(xpaths, chunkSize);
+  const counts: number[] = [];
+
+  for (const chunk of chunks) {
+    const chunkCounts = await batchCountXPaths(page, chunk);
+    counts.push(...chunkCounts);
   }
 
-  const xpaths = variants.map((v) => v.xpath);
-  const counts = await batchCountXPaths(page, xpaths);
+  return counts;
+}
 
-  const withCounts = variants.map((v, i) => {
-    const matchCount = counts[i] ?? 0;
-    const scored = { ...v, matchCount, confidenceScore: 0 };
+export function rankXPathVariantsWithCounts(
+  variants: XPathVariant[],
+  counts: number[]
+): { ranked: XPathVariant[]; locators: LocatorTemplates } {
+  if (variants.length === 0) {
+    return { ranked: [], locators: { ...EMPTY_LOCATORS } };
+  }
+
+  const withCounts = variants.map((variant, index) => {
+    const matchCount = counts[index] ?? 0;
+    const scored = { ...variant, matchCount, confidenceScore: 0 };
     scored.confidenceScore = computeVariantScore(scored);
     return scored;
   });
@@ -74,19 +130,19 @@ export async function rankXPathVariants(
   });
 
   let recommended =
-    ranked.find((v) => v.matchCount === 1 && v.tier < 9) ??
-    ranked.find((v) => v.matchCount === 1) ??
-    ranked.find((v) => v.matchCount > 0 && v.tier < 9) ??
+    ranked.find((variant) => variant.matchCount === 1 && variant.tier < 9) ??
+    ranked.find((variant) => variant.matchCount === 1) ??
+    ranked.find((variant) => variant.matchCount > 0 && variant.tier < 9) ??
     ranked[0];
 
   if (recommended) {
     recommended = { ...recommended, recommended: true };
-    const idx = ranked.findIndex((v) => v.xpath === recommended!.xpath);
+    const idx = ranked.findIndex((variant) => variant.xpath === recommended!.xpath);
     if (idx >= 0) ranked[idx] = recommended;
   }
 
   const fallbacks = ranked
-    .filter((v) => v.xpath !== recommended?.xpath)
+    .filter((variant) => variant.xpath !== recommended?.xpath)
     .slice(0, MAX_FALLBACK_VARIANTS);
 
   const locators: LocatorTemplates = {
@@ -104,6 +160,18 @@ export async function rankXPathVariants(
   };
 
   return { ranked, locators };
+}
+
+export async function rankXPathVariants(
+  page: Page,
+  variants: XPathVariant[]
+): Promise<{ ranked: XPathVariant[]; locators: LocatorTemplates }> {
+  if (variants.length === 0) {
+    return { ranked: [], locators: { ...EMPTY_LOCATORS } };
+  }
+
+  const counts = await batchCountXPaths(page, variants.map((variant) => variant.xpath));
+  return rankXPathVariantsWithCounts(variants, counts);
 }
 
 export function toRegistryLocators(locators: LocatorTemplates): LocatorTemplates {
