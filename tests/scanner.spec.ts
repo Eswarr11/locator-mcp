@@ -29,6 +29,13 @@ import {
   toRegistryLocators,
 } from '../src/scanner/rank-xpath-variants.js';
 import { escapeXPathLiteral, isUnstableClass } from '../src/scanner/xpath-utils.js';
+import {
+  buildFilteredLocator,
+  enrichLocatorsWithSemantic,
+  escapeLocatorString,
+  generateFilterChain,
+  generateSemanticLocator,
+} from '../src/scanner/generate-semantic-locators.js';
 import { ElementContext, XPathVariant } from '../src/scanner/scanner.types.js';
 
 const emptyAttrs = {
@@ -572,5 +579,293 @@ describe('generateXPathVariantsUpToTier', () => {
     assert.ok(allTiers.length >= upToTier3.length);
     assert.ok(!upToTier3.some((variant) => variant.tier > 3));
     assert.ok(allTiers.some((variant) => variant.tier > 3));
+  });
+});
+
+describe('escapeLocatorString', () => {
+  test('wraps simple strings in single quotes', () => {
+    assert.equal(escapeLocatorString('Save'), "'Save'");
+  });
+
+  test('uses double quotes when value contains single quotes', () => {
+    assert.equal(escapeLocatorString("Save draft's copy"), '"Save draft\'s copy"');
+  });
+});
+
+describe('buildFilteredLocator', () => {
+  test('chains has and hasNot filters', () => {
+    const result = buildFilteredLocator("getByTestId('flex')", [
+      { type: 'has', locator: "locator('#recipient-select')" },
+      { type: 'hasNot', locator: "locator('[data-testid*=\"send-email-action\"]')" },
+    ]);
+
+    assert.equal(
+      result,
+      "getByTestId('flex').filter({ has: locator('#recipient-select') }).filter({ hasNot: locator('[data-testid*=\"send-email-action\"]') })"
+    );
+  });
+});
+
+describe('generateSemanticLocator', () => {
+  test('prefers getByRole over getByTestId for button with text', () => {
+    const element = ctx({
+      tagName: 'button',
+      directText: 'Save Changes',
+      attributes: {
+        ...emptyAttrs,
+        testId: 'save-button',
+        testingAttributes: { 'data-testid': 'save-button' },
+      },
+    });
+
+    const result = generateSemanticLocator(element, 1);
+    assert.ok(result);
+    assert.equal(result!.primary, "getByRole('button', { name: 'Save Changes' })");
+    assert.equal(result!.strategy, 'byRole');
+    assert.ok(result!.alternatives.some((locator) => locator.includes('getByTestId')));
+  });
+
+  test('generates getByLabel for labeled input', () => {
+    const element = ctx({
+      tagName: 'input',
+      attributes: { ...emptyAttrs, placeholder: 'Enter your email' },
+      precedingLabel: 'Email Address',
+    });
+
+    const result = generateSemanticLocator(element, 1);
+    assert.ok(result);
+    assert.equal(result!.primary, "getByLabel('Email Address')");
+    assert.ok(result!.alternatives.some((locator) => locator.includes('getByPlaceholder')));
+  });
+
+  test('generates getByPlaceholder when no label exists', () => {
+    const element = ctx({
+      tagName: 'input',
+      attributes: { ...emptyAttrs, placeholder: 'Search goals' },
+    });
+
+    const result = generateSemanticLocator(element, 1);
+    assert.ok(result);
+    assert.equal(result!.primary, "getByPlaceholder('Search goals')");
+  });
+
+  test('generates getByAltText for images', () => {
+    const element = ctx({
+      tagName: 'img',
+      attributes: { ...emptyAttrs, alt: 'Company logo' },
+    });
+
+    const result = generateSemanticLocator(element, 1);
+    assert.ok(result);
+    assert.equal(result!.primary, "getByAltText('Company logo')");
+  });
+
+  test('falls back to css locator when only class is available', () => {
+    const element = ctx({
+      tagName: 'div',
+      attributes: { ...emptyAttrs, className: 'content-wrapper' },
+    });
+
+    const result = generateSemanticLocator(element, 1, {
+      xpath: "//div[@class='content-wrapper'][1]",
+    });
+
+    assert.ok(result);
+    assert.equal(result!.primary, "locator('.content-wrapper')");
+    assert.ok(result!.alternatives.some((locator) => locator.includes('xpath=')));
+  });
+
+  test('builds scoped semantic locator with filters when matchCount > 1', () => {
+    const element = ctx({
+      tagName: 'button',
+      attributes: {
+        ...emptyAttrs,
+        testId: 'placeholder-button',
+        testingAttributes: { 'data-testid': 'placeholder-button' },
+      },
+      ancestors: [
+        { tagName: 'div', testId: 'flex', id: null, role: null, ariaLabel: null },
+      ],
+      childHints: [
+        { tagName: 'select', testId: null, id: 'recipient-select', role: null, ariaLabel: null },
+      ],
+    });
+
+    const result = generateSemanticLocator(element, 3);
+    assert.ok(result);
+    assert.ok(
+      result!.primary.includes('getByTestId') ||
+      result!.primary.includes('getByRole') ||
+      result!.primary.includes('filter({ has:')
+    );
+    assert.ok(
+      result!.alternatives.some((locator) => locator.includes('getByTestId')) ||
+      result!.primary.includes("getByTestId('flex')")
+    );
+  });
+});
+
+describe('generateFilterChain', () => {
+  test('returns empty filters for unique matches', () => {
+    const element = ctx({ tagName: 'button', attributes: { ...emptyAttrs } });
+    assert.deepEqual(generateFilterChain(element, "getByRole('button')", 1), []);
+  });
+
+  test('generates has filters from child hints', () => {
+    const element = ctx({
+      tagName: 'button',
+      attributes: { ...emptyAttrs, testId: 'placeholder-button' },
+      childHints: [
+        { tagName: 'select', testId: null, id: 'recipient-select', role: null, ariaLabel: null },
+      ],
+    });
+
+    const filters = generateFilterChain(element, "getByTestId('flex')", 3);
+    assert.ok(filters.some((filter) => filter.type === 'has' && filter.locator.includes('#recipient-select')));
+  });
+});
+
+describe('enrichLocatorsWithSemantic', () => {
+  test('adds semantic fields to ranked locators', () => {
+    const element = ctx({
+      tagName: 'button',
+      directText: 'Save',
+      attributes: {
+        ...emptyAttrs,
+        testId: 'save-button',
+        testingAttributes: { 'data-testid': 'save-button' },
+      },
+    });
+
+    const enriched = enrichLocatorsWithSemantic(
+      {
+        recommended: {
+          xpath: "//button[@data-testid='save-button']",
+          tier: 1,
+          strategy: 'testingAttribute',
+          variantType: 'exact',
+          confidenceScore: 105,
+          matchCount: 1,
+          isRelational: false,
+        },
+        fallbacks: [],
+        xpath: "//button[@data-testid='save-button']",
+        confidence: 'high',
+        matchCount: 1,
+        strategy: 'testingAttribute',
+      },
+      element
+    );
+
+    assert.equal(enriched.semantic, "getByRole('button', { name: 'Save' })");
+    assert.equal(enriched.recommended?.semanticLocator, enriched.semantic);
+    assert.equal(enriched.semanticStrategy, 'byRole');
+  });
+});
+
+describe('computeVariantScore — semantic boost', () => {
+  test('boosts score for variants with semantic locators', () => {
+    const withSemantic: XPathVariant = {
+      xpath: "//button[@data-testid='save']",
+      tier: 1,
+      strategy: 'testingAttribute',
+      variantType: 'exact',
+      confidenceScore: 0,
+      matchCount: 1,
+      isRelational: false,
+      semanticLocator: "getByRole('button', { name: 'Save' })",
+      semanticPriority: 1,
+    };
+    const withoutSemantic: XPathVariant = {
+      xpath: "//button[@data-testid='save']",
+      tier: 1,
+      strategy: 'testingAttribute',
+      variantType: 'exact',
+      confidenceScore: 0,
+      matchCount: 1,
+      isRelational: false,
+    };
+
+    assert.ok(computeVariantScore(withSemantic) > computeVariantScore(withoutSemantic));
+  });
+});
+
+describe('rankXPathVariantsWithCounts — semantic preference', () => {
+  test('prefers variants with semantic locators', () => {
+    const variants: XPathVariant[] = [
+      {
+        xpath: "//button[@data-testid='save']",
+        tier: 1,
+        strategy: 'testingAttribute',
+        variantType: 'exact',
+        confidenceScore: 0,
+        matchCount: 0,
+        isRelational: false,
+      },
+      {
+        xpath: "//button[normalize-space()='Save']",
+        tier: 5,
+        strategy: 'text',
+        variantType: 'exact',
+        confidenceScore: 0,
+        matchCount: 0,
+        isRelational: false,
+        semanticLocator: "getByRole('button', { name: 'Save' })",
+        semanticPriority: 1,
+      },
+    ];
+
+    const { locators } = rankXPathVariantsWithCounts(variants, [1, 1]);
+    assert.equal(locators.semantic, "getByRole('button', { name: 'Save' })");
+    assert.equal(locators.recommended?.semanticLocator, locators.semantic);
+  });
+});
+
+describe('toRegistryLocators — semantic fields', () => {
+  test('persists semantic locator fields', () => {
+    const stored = toRegistryLocators({
+      recommended: {
+        xpath: "//button[@data-testid='save']",
+        tier: 1,
+        strategy: 'testingAttribute',
+        variantType: 'exact',
+        confidenceScore: 105,
+        matchCount: 1,
+        isRelational: false,
+        semanticLocator: "getByRole('button', { name: 'Save' })",
+        semanticStrategy: 'byRole',
+        semanticPriority: 1,
+      },
+      fallbacks: [],
+      xpath: "//button[@data-testid='save']",
+      confidence: 'high',
+      matchCount: 1,
+      strategy: 'testingAttribute',
+      semantic: "getByRole('button', { name: 'Save' })",
+      semanticFallbacks: ["getByTestId('save')"],
+      semanticStrategy: 'byRole',
+      semanticPriority: 1,
+    });
+
+    assert.equal(stored.semantic, "getByRole('button', { name: 'Save' })");
+    assert.deepEqual(stored.semanticFallbacks, ["getByTestId('save')"]);
+    assert.equal(stored.semanticStrategy, 'byRole');
+  });
+});
+
+describe('generateLocators — semantic output', () => {
+  test('includes semantic locator for testId button', () => {
+    const locators = generateLocators({
+      tagName: 'button',
+      text: 'Save',
+      attributes: {
+        ...emptyAttrs,
+        testId: 'save-button',
+        testingAttributes: { 'data-testid': 'save-button' },
+      },
+    });
+
+    assert.equal(locators.semantic, "getByRole('button', { name: 'Save' })");
+    assert.ok(Array.isArray(locators.semanticFallbacks));
   });
 });

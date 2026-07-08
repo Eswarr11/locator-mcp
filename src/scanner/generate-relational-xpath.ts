@@ -5,6 +5,7 @@ export {
 
 import { ElementContext, LocatorTemplates } from './scanner.types.js';
 import { generateAllXPathVariants, buildTestIdFrequencyMap } from './generate-xpath-variants.js';
+import { enrichLocatorsWithSemantic } from './generate-semantic-locators.js';
 
 /** @deprecated Use generateAllXPathVariants */
 export function generateLocatorCandidates(
@@ -47,7 +48,7 @@ export function generateLocators(input: GenerateLocatorsInput): LocatorTemplates
   if (variants.length === 0) return { fallbacks: [] };
 
   const best = variants[0];
-  return {
+  const base: LocatorTemplates = {
     recommended: { ...best, matchCount: 0, confidenceScore: 0 },
     fallbacks: variants.slice(1, 6).map((v) => ({ ...v, matchCount: 0, confidenceScore: 0 })),
     xpath: best.xpath,
@@ -58,6 +59,8 @@ export function generateLocators(input: GenerateLocatorsInput): LocatorTemplates
     confidence: best.tier <= 2 ? 'high' : best.tier <= 5 ? 'medium' : 'low',
     strategy: best.strategy,
   };
+
+  return enrichLocatorsWithSemantic(base, ctx);
 }
 
 export function candidateToLocatorTemplate(

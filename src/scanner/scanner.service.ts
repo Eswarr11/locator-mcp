@@ -12,6 +12,7 @@ import {
   ScanTimings,
 } from './scanner.types.js';
 import { extractAllElementContexts } from './extract-element-context.js';
+import { enrichLocatorsWithSemantic } from './generate-semantic-locators.js';
 import { generateKey } from './generate-key.js';
 import {
   buildTestIdFrequencyMap,
@@ -71,7 +72,12 @@ function tryUniqueTestIdShortcut(
     testId: `[data-testid='${testId}']`,
   };
 
-  return rankXPathVariantsWithCounts([variant], [1]).locators;
+  const locators = enrichLocatorsWithSemantic(
+    rankXPathVariantsWithCounts([variant], [1]).locators,
+    ctx
+  );
+
+  return locators;
 }
 
 function buildStats(elements: ElementMetadata[]): ScanStats {
@@ -139,10 +145,12 @@ async function countAndMergeXPaths(
 function rankElementVariants(
   variants: XPathVariant[],
   xpathToIndex: Map<string, number>,
-  globalCounts: number[]
+  globalCounts: number[],
+  ctx: ElementContext
 ): LocatorTemplates {
   const counts = getVariantCounts(variants, xpathToIndex, globalCounts);
-  return rankXPathVariantsWithCounts(variants, counts).locators;
+  const locators = rankXPathVariantsWithCounts(variants, counts).locators;
+  return enrichLocatorsWithSemantic(locators, ctx);
 }
 
 async function buildElementVariants(
@@ -192,7 +200,7 @@ async function buildElementVariants(
         continue;
       }
 
-      const locators = rankElementVariants(elementVariants[index]!, xpathToIndex, globalCounts);
+      const locators = rankElementVariants(elementVariants[index]!, xpathToIndex, globalCounts, ctx);
       if (hasStrongUniqueMatch(locators) || maxTier === 9) {
         elementLocators[index] = locators;
         continue;
@@ -210,7 +218,8 @@ async function buildElementVariants(
       elementLocators[index] = rankElementVariants(
         elementVariants[index]!,
         xpathToIndex,
-        globalCounts
+        globalCounts,
+        contexts[index]!
       );
     }
   }

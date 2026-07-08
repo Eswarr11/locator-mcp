@@ -38,6 +38,7 @@ export interface ElementContext {
   ancestors: AncestorContext[];
   precedingLabel: string | null;
   siblingIndex: number | null;
+  childHints?: ChildHint[];
 }
 
 export type XPathTier = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
@@ -64,6 +65,30 @@ export type LocatorConfidence = 'high' | 'medium' | 'low';
 
 export type VariantType = 'exact' | 'generalized';
 
+export type SemanticStrategy =
+  | 'byRole'
+  | 'byLabel'
+  | 'byPlaceholder'
+  | 'byText'
+  | 'byAltText'
+  | 'byTitle'
+  | 'byTestId'
+  | 'cssLocator'
+  | 'xpathLocator';
+
+export interface LocatorFilter {
+  type: 'has' | 'hasNot';
+  locator: string;
+}
+
+export interface ChildHint {
+  tagName: string;
+  testId: string | null;
+  id: string | null;
+  role: string | null;
+  ariaLabel: string | null;
+}
+
 export interface XPathVariant {
   xpath: string;
   xpathTemplate?: string;
@@ -76,6 +101,10 @@ export interface XPathVariant {
   recommended?: boolean;
   testId?: string;
   css?: string;
+  semanticLocator?: string;
+  semanticStrategy?: SemanticStrategy;
+  semanticPriority?: number;
+  semanticFilters?: LocatorFilter[];
 }
 
 export interface LocatorTemplates {
@@ -90,6 +119,10 @@ export interface LocatorTemplates {
   confidence?: LocatorConfidence;
   matchCount?: number;
   strategy?: LocatorStrategy;
+  semantic?: string;
+  semanticFallbacks?: string[];
+  semanticStrategy?: SemanticStrategy;
+  semanticPriority?: number;
 }
 
 export interface LocatorCandidate {

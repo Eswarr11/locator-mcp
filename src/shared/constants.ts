@@ -116,6 +116,22 @@ export const TIER_BASE_SCORES: Record<number, number> = {
   9: 10,
 };
 
+export const SEMANTIC_PRIORITY: Record<string, number> = {
+  byRole: 1,
+  byLabel: 2,
+  byPlaceholder: 3,
+  byText: 4,
+  byAltText: 5,
+  byTitle: 6,
+  byTestId: 7,
+  cssLocator: 8,
+  xpathLocator: 9,
+};
+
+export const SEMANTIC_SCORE_BOOST = 15;
+
+export const MAX_SEMANTIC_FILTERS = 3;
+
 export const MAX_FALLBACK_VARIANTS = 5;
 
 export const XPATH_BATCH_CHUNK_SIZE = 1000;

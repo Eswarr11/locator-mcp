@@ -1,5 +1,10 @@
 import { Page } from '@playwright/test';
-import { MAX_FALLBACK_VARIANTS, TIER_BASE_SCORES, XPATH_BATCH_CHUNK_SIZE } from '../shared/constants.js';
+import {
+  MAX_FALLBACK_VARIANTS,
+  SEMANTIC_SCORE_BOOST,
+  TIER_BASE_SCORES,
+  XPATH_BATCH_CHUNK_SIZE,
+} from '../shared/constants.js';
 import {
   LocatorConfidence,
   LocatorTemplates,
@@ -14,6 +19,14 @@ export function computeVariantScore(variant: XPathVariant): number {
   if (variant.variantType === 'exact') score += 5;
   if (variant.matchCount > 1) score -= variant.matchCount * 2;
   if (variant.matchCount === 0) score -= 50;
+
+  if (variant.semanticLocator && variant.semanticPriority !== undefined) {
+    const semanticBase = 100 - variant.semanticPriority * 10;
+    score = Math.max(score, semanticBase);
+    if (variant.matchCount === 1) {
+      score += SEMANTIC_SCORE_BOOST;
+    }
+  }
 
   return score;
 }
@@ -123,6 +136,14 @@ export function rankXPathVariantsWithCounts(
   });
 
   const ranked = [...withCounts].sort((a, b) => {
+    const aHasSemantic = a.semanticLocator !== undefined;
+    const bHasSemantic = b.semanticLocator !== undefined;
+    if (aHasSemantic !== bHasSemantic) {
+      return aHasSemantic ? -1 : 1;
+    }
+    if (aHasSemantic && bHasSemantic && a.semanticPriority !== b.semanticPriority) {
+      return (a.semanticPriority ?? 99) - (b.semanticPriority ?? 99);
+    }
     if (b.confidenceScore !== a.confidenceScore) {
       return b.confidenceScore - a.confidenceScore;
     }
@@ -130,6 +151,7 @@ export function rankXPathVariantsWithCounts(
   });
 
   let recommended =
+    ranked.find((variant) => variant.semanticLocator && variant.matchCount === 1) ??
     ranked.find((variant) => variant.matchCount === 1 && variant.tier < 9) ??
     ranked.find((variant) => variant.matchCount === 1) ??
     ranked.find((variant) => variant.matchCount > 0 && variant.tier < 9) ??
@@ -157,6 +179,13 @@ export function rankXPathVariantsWithCounts(
     confidence: scoreToConfidence(recommended?.confidenceScore ?? 0),
     matchCount: recommended?.matchCount ?? 0,
     strategy: recommended?.strategy,
+    semantic: recommended?.semanticLocator,
+    semanticFallbacks: ranked
+      .filter((variant) => variant.semanticLocator && variant.semanticLocator !== recommended?.semanticLocator)
+      .map((variant) => variant.semanticLocator!)
+      .slice(0, MAX_FALLBACK_VARIANTS),
+    semanticStrategy: recommended?.semanticStrategy,
+    semanticPriority: recommended?.semanticPriority,
   };
 
   return { ranked, locators };
@@ -175,8 +204,22 @@ export async function rankXPathVariants(
 }
 
 export function toRegistryLocators(locators: LocatorTemplates): LocatorTemplates {
-  const { recommended, fallbacks, xpath, xpathRelational, xpathTemplate, testId, css, confidence, matchCount, strategy } =
-    locators;
+  const {
+    recommended,
+    fallbacks,
+    xpath,
+    xpathRelational,
+    xpathTemplate,
+    testId,
+    css,
+    confidence,
+    matchCount,
+    strategy,
+    semantic,
+    semanticFallbacks,
+    semanticStrategy,
+    semanticPriority,
+  } = locators;
 
   return {
     recommended,
@@ -189,5 +232,9 @@ export function toRegistryLocators(locators: LocatorTemplates): LocatorTemplates
     confidence,
     matchCount,
     strategy,
+    semantic,
+    semanticFallbacks,
+    semanticStrategy,
+    semanticPriority,
   };
 }

@@ -213,6 +213,8 @@ server.tool(
       confidence: el.locators.confidence,
       matchCount: el.locators.matchCount,
       strategy: el.locators.strategy,
+      semantic: el.locators.semantic,
+      semanticStrategy: el.locators.semanticStrategy,
     }));
 
     return { content: [{ type: 'text', text: JSON.stringify(keys, null, 2) }] };
@@ -243,7 +245,18 @@ server.tool(
       };
     }
 
-    const { recommended, fallbacks, xpath, confidence, matchCount, strategy } = entry.locators;
+    const {
+      recommended,
+      fallbacks,
+      xpath,
+      confidence,
+      matchCount,
+      strategy,
+      semantic,
+      semanticFallbacks,
+      semanticStrategy,
+      semanticPriority,
+    } = entry.locators;
     return {
       content: [{
         type: 'text',
@@ -252,7 +265,18 @@ server.tool(
           tagName: entry.tagName,
           text: entry.text,
           attributes: entry.attributes,
-          locators: { recommended, fallbacks, xpath, confidence, matchCount, strategy },
+          locators: {
+            recommended,
+            fallbacks,
+            xpath,
+            confidence,
+            matchCount,
+            strategy,
+            semantic,
+            semanticFallbacks,
+            semanticStrategy,
+            semanticPriority,
+          },
         }, null, 2),
       }],
     };

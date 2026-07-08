@@ -117,6 +117,23 @@ function extractContextInBrowser(options) {
     return index >= 0 ? index + 1 : null;
   }
 
+  function getChildHints(el) {
+    const hints = [];
+    for (const child of el.children) {
+      const tagName = child.tagName.toLowerCase();
+      if (ignored.has(tagName)) continue;
+
+      hints.push({
+        tagName,
+        testId: child.getAttribute('data-testid'),
+        id: child.getAttribute('id'),
+        role: child.getAttribute('role'),
+        ariaLabel: child.getAttribute('aria-label'),
+      });
+    }
+    return hints;
+  }
+
   const elements = document.querySelectorAll(selector);
   const results = [];
 
@@ -131,6 +148,7 @@ function extractContextInBrowser(options) {
       ancestors: getAncestors(el),
       precedingLabel: getPrecedingLabel(el),
       siblingIndex: getSiblingIndex(el),
+      childHints: getChildHints(el),
     });
   }
 
